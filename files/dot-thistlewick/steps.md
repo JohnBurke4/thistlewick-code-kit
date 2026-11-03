@@ -18,6 +18,12 @@ templates: coordinator_full_review, plan_only
 
 Write a plan that ends with a Stages list (2 to 10 short names, one per line, each at most 60 characters). Publish it as a Docs-type artifact (step 8's artifact rules); if `wireframe_for_ui` is ticked and the work has UI, the wireframe goes on the doc's Wireframe tab. Relay `artifact` with its link, then `plan_ready`, and wait for the owner's approval of the plan, its stages and any wireframe, together, before writing code. Then relay `stages` (step 8).
 
+## scope_agents
+label: Scope the agents in the plan
+templates:
+
+Only with `plan_first` ticked: put an Agents table in the plan, before its Stages, with one row per role in `/tmp/assistant-launch/agents.txt`: spawn or skip, the model and the effort. Skip a role only when the task has none of its work, saying why, and lower a model or effort only where the role's part of the task is routine. Never use a role that isn't listed. Keep each role's launched model or pick a lower tier (sonnet is below opus and fable, haiku below sonnet), and keep its effort or pick a lower one (low, medium, high, xhigh, max, lowest first). The owner's approval of the table is the owner's choice of agents, models and efforts for this run (step 6). Until then, an agent spawned uses its launched settings; after it, spawn the agents only as the table says, giving each its planned effort in its brief's effort line and, where the Agent tool takes an effort, as that setting too.
+
 ## ask_when_unsure
 label: Ask me questions when unsure
 templates: coordinator_full_review, plan_only

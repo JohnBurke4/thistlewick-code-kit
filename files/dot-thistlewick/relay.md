@@ -1,8 +1,8 @@
 # Relay
 
-How a launched session sends its short structured updates to the app's run page: one `curl` POST per event to the relay ingest's MCP endpoint, by the script below. Only for a session started by the launch routine, after `.thistlewick/launch.md`'s step 1, `.thistlewick/price.md`'s step 1, `.thistlewick/issues.md`'s step 1, or the payload check of `launch.md`'s step 9 (a scheduled task test), passed. Nothing goes on GitHub: never post an event as a comment, by `gh api` or any other way.
+How a launched session sends its short structured updates to the app's run page: one `curl` POST per event to the relay ingest's MCP endpoint, by the script below. Only for a session started by the launch routine, after `.thistlewick/launch.md`'s step 1, `.thistlewick/price.md`'s step 1, `.thistlewick/issues.md`'s step 1, `.thistlewick/preview.md`'s step 1 (a preview session), or the payload check of `launch.md`'s step 9 (a scheduled task test), passed. Nothing goes on GitHub: never post an event as a comment, by `gh api` or any other way.
 
-The relay token is not in this session and never is: the cloud environment's Network secret, bound to the ingest host alone, adds it on the way out. Never add an `Authorization` header, and never look for the token.
+The session needs no secret beyond its run's keys in `run.json`: its cloud environment only has to reach the ingest host. Never add an `Authorization` header.
 
 ## The event
 
@@ -12,7 +12,7 @@ Write the event with your Write tool to `/tmp/assistant-launch/event.json`, as a
 - `link` only where the table allows it; `pr` as a number, only where the table allows it;
 - `summary` as the rules below say.
 
-The run's id and key are not in it: the script adds them from `/tmp/assistant-launch/run.json`, which `launch.md`'s step 1 (or, for a price check, `price.md`'s step 1, for a breakdown, `issues.md`'s step 1, and for a scheduled task test, `launch.md`'s step 9) wrote once the payload passed. They never go into a command, a file you write, a summary or the chat. Without `run.json`, send nothing.
+The run's id and key are not in it: the script adds them from `/tmp/assistant-launch/run.json`, which `launch.md`'s step 1 (or, for a price check, `price.md`'s step 1, for a breakdown, `issues.md`'s step 1, for a preview session, `preview.md`'s step 1, and for a scheduled task test, `launch.md`'s step 9) wrote once the payload passed. Once `started` is recorded, the script replaces `run_key` there with the session key its answer carries, which every later event needs, and removes any earlier `/tmp/assistant-launch/preview.json`; if the answer also carries a preview key, it writes that key, the run's id and the relay host to a new `preview.json`, which only the kit's preview client (`.thistlewick/preview-client.mjs`) reads. They never go into a command, a file you write, a summary or the chat, and you never read or print `preview.json`. Without `run.json`, send nothing.
 
 ## Events
 
@@ -32,15 +32,15 @@ The run's id and key are not in it: the script adds them from `/tmp/assistant-la
 ## Rules
 
 - `link` is only the session link, or `https://claude.ai/artifact/<id>` or `https://claude.ai/code/artifact/<uuid>` of an artifact you made in this session, shared or private. Never any other URL.
-- `pr` is only the number of the PR you opened into the integration branch from `thistlewick-issue-<issue>`.
-- The summary is plain text, 1 to 1,000 characters (a breakdown's `done` excepted, below), in your own words: no Markdown, HTML or URLs, no `<`, no secrets, tokens or environment values, and no quoted issue or comment text. Tokens here are credentials; the Usage block's token counts are allowed. The one exception to environment values is the Coordinator line's model name and effort word, nothing else.
+- `pr` is only the number of the PR you opened into the integration branch from `$BRANCH` in `/tmp/assistant-launch/checked.env`: `thistlewick-issue-<issue>`, for a ticket `thistlewick-ticket-<ticket id>`, or a preview session's `thistlewick-issue-preview-<12 hex digits>`.
+- The summary is plain text, 1 to 1,000 characters (a breakdown's or a project price check's `done` excepted, below), in your own words: no Markdown, HTML or URLs, no `<`, no secrets, tokens or environment values, and no quoted issue, ticket or comment text. Tokens here are credentials; the Usage block's token counts are allowed. The one exception to environment values is the Coordinator line's model name and effort word, nothing else.
 - For `stages`, the summary is the stages in order, one per line: 2 to 10 lines, each 1 to 60 characters with something visible. For `stage`, it starts with the stage's number in that list and `. `, then what the stage is doing. Send `stages` again if the stages change (it clears the marks), then `stage_done` for each stage already finished and `stage` for the one in progress.
 - For `stage_done`, the summary has the `stage` grammar: the stage's number in that list and `. `, then what was finished.
 - For `answered`, the summary says only that the answer arrived, in your own words; never the answer itself or any part of it.
-- For a launched run's `started`, the summary is exactly the line the Coordinator script prints, never written by hand; on `FAIL`, a sentence in your own words. A price check's, a breakdown's and a scheduled task test's `started` summaries are the fixed ones their scripts write.
-- For a price check's `done`, the summary is the estimate as one line of JSON, which `price.md`'s answer check writes.
+- For a launched run's `started`, the summary is exactly the line the Coordinator script prints, never written by hand; on `FAIL`, a sentence in your own words. A price check's, a breakdown's, a preview session's and a scheduled task test's `started` summaries are the ones their scripts write: a preview session's is its hash, which `preview.md`'s step 1 writes.
+- For a price check's `done`, the summary is the estimate as one line of JSON, which `price.md`'s answer check writes; a project price check's, of several items, is up to 8,000 characters.
 - For a breakdown's `done`, the summary is the answer as one line of JSON, up to 8,000 characters, which `issues.md`'s answer check writes. Its `quote`s are whole lines of the request's notes, which that answer may carry: the own-words rule above is about issue and comment text.
-- A launched run's `done` or `failed` summary ends with the Usage block (see Usage).
+- A launched run's or a preview session's `done` or `failed` summary ends with the Usage block (see Usage).
 
 Examples of `event.json`:
 
@@ -79,7 +79,7 @@ console.log(/^session_[0-9A-Za-z]{1,64}$/.test(s) ? "https://claude.ai/code/" + 
 
 ## Send
 
-Run this verbatim after each `event.json` you write. It builds one JSON-RPC call of the ingest's `relay` tool in a file readable by you alone, adds the run's id and key from `run.json`, posts the file with `curl --data @file`, deletes it, and prints one line: `Recorded.`, `Not recorded.`, or `Refused <field>`.
+Run this verbatim after each `event.json` you write. It builds one JSON-RPC call of the ingest's `relay` tool in a file readable by you alone, adds the run's id and key from `run.json`, posts the file with `curl --data @file`, deletes it, keeps a recorded `started`'s session key in `run.json` and any preview key in `preview.json`, each readable by you alone, and prints one line: `Recorded.`, `Not recorded.`, or `Refused <field>`.
 
 ```sh
 node -e '
@@ -106,7 +106,32 @@ try { a = JSON.parse(answer); } catch {}
 const res = a && typeof a === "object" && a.result && typeof a.result === "object" ? a.result : null;
 const first = res && Array.isArray(res.content) ? res.content[0] : null;
 const text = first && first.type === "text" && typeof first.text === "string" ? first.text : "";
-if (res && res.isError !== true && text === "Recorded.") say("Recorded.");
+if (res && res.isError !== true && text === "Recorded.") {
+  if (ev.event !== "started" || typeof run.run_key !== "string" || !/^[0-9a-f]{64}$/.test(run.run_key)) say("Recorded.");
+  try { fs.rmSync(OUT + "preview.json", { force: true }); } catch {}
+  if (res._meta === undefined) say("Recorded.");
+  const key = res._meta && typeof res._meta === "object" ? res._meta["app.thistlewick/session_key"] : null;
+  if (typeof key !== "string" || !/^[1-9][0-9]{0,18}\.[0-9a-f]{64}$/.test(key)) say("Not recorded.");
+  try {
+    fs.rmSync(OUT + "run.json.tmp", { force: true });
+    fs.writeFileSync(OUT + "run.json.tmp", JSON.stringify({ run_id: run.run_id, run_key: key }) + "\n", { mode: 0o600, flag: "wx" });
+    fs.renameSync(OUT + "run.json.tmp", OUT + "run.json");
+  } catch {
+    try { fs.rmSync(OUT + "run.json.tmp", { force: true }); } catch {}
+    say("Not recorded.");
+  }
+  const preview = res._meta["app.thistlewick/preview_key"];
+  if (typeof preview === "string" && /^[1-9][0-9]{0,18}\.[0-9a-f]{64}$/.test(preview)) {
+    try {
+      fs.rmSync(OUT + "preview.json.tmp", { force: true });
+      fs.writeFileSync(OUT + "preview.json.tmp", JSON.stringify({ run_id: run.run_id, preview_key: preview, relay_host: new URL(ENDPOINT).host }) + "\n", { mode: 0o600, flag: "wx" });
+      fs.renameSync(OUT + "preview.json.tmp", OUT + "preview.json");
+    } catch {
+      try { fs.rmSync(OUT + "preview.json.tmp", { force: true }); } catch {}
+    }
+  }
+  say("Recorded.");
+}
 const field = res && res.isError === true ? FIELDS.find((f) => text.startsWith(f + " ")) : undefined;
 say(field ? "Refused " + field : "Not recorded.");
 '
@@ -115,11 +140,11 @@ say(field ? "Refused " + field : "Not recorded.");
 1. Count your events, resends included. Send at most 50, keeping the last of them for `done` or `failed`; after the 50th, send no more.
 2. `Recorded.` means the event landed.
 3. `Refused <field>` names a field (`run_id`, `run_key`, `event`, `link`, `pr`, `summary` or `arguments`) whose rule the event broke, and nothing was recorded. Write that event once more, corrected: leave `link` or `pr` out rather than invent one, and rewrite the summary in your own words. For a `done` or `failed` that carries the Usage block, rewrite only your own text and keep the block unchanged. If the resend is refused too, go on as in 4. `started` is the exception: it is never resent.
-4. Anything else (`Not recorded.`, the host unreachable, a timeout): carry on with the work, silently. Never resend, since a resend can record an event twice, and never fall back to a GitHub comment or any other way of sending it. The one exception is `started`: `launch.md`'s step 4 (for a price check, `price.md`'s step 2, for a breakdown, `issues.md`'s step 2, and for a scheduled task test, `launch.md`'s step 9) stops the session unless it printed `Recorded.`.
+4. Anything else (`Not recorded.`, the host unreachable, a timeout): carry on with the work, silently. Never resend, since a resend can record an event twice, and never fall back to a GitHub comment or any other way of sending it. The one exception is `started`: `launch.md`'s step 4 (for a price check, `price.md`'s step 2, for a breakdown, `issues.md`'s step 2, for a preview session, `preview.md`'s step 3, and for a scheduled task test, `launch.md`'s step 9) stops the session unless it printed `Recorded.`.
 
 ## Coordinator
 
-Run this verbatim right before you write a launched run's `started`; never on a price check, a breakdown or a scheduled task test, whose `started` summaries are fixed. It reads the model of the newest assistant message in this session's own transcript (never a subagent's) and the effort from `CLAUDE_EFFORT`, and prints one line, `Coordinator: <model>, <effort> effort.`, or `FAIL`. It reads nothing else, and prints `FAIL` if the file it would read is a symlink or not what it should be.
+Run this verbatim right before you write a launched run's `started`; never on a price check, a breakdown, a preview session or a scheduled task test, whose `started` summaries their scripts write. It reads the model of the newest assistant message in this session's own transcript (never a subagent's) and the effort from `CLAUDE_EFFORT`, and prints one line, `Coordinator: <model>, <effort> effort.`, or `FAIL`. It reads nothing else, and prints `FAIL` if the file it would read is a symlink or not what it should be.
 
 ```sh
 node -e '
@@ -162,7 +187,7 @@ console.log(out);
 
 ## Usage
 
-Run this verbatim right before you write a launched run's `done` or `failed`; never on a price check, a breakdown or a scheduled task test. It adds up the token counts in this session's own transcript and its subagents', and prints a block of at most five lines (the total, then one line per model, largest first) or `FAIL`. It reads nothing else, and prints `FAIL` if any file or folder it would read is a symlink or not what it should be.
+Run this verbatim right before you write a launched run's or a preview session's `done` or `failed`; never on a price check, a breakdown or a scheduled task test. It adds up the token counts in this session's own transcript and its subagents', and prints a block of at most five lines (the total, then one line per model, largest first) or `FAIL`. It reads nothing else, and prints `FAIL` if any file or folder it would read is a symlink or not what it should be.
 
 ```sh
 node -e '
